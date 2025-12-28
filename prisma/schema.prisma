@@ -1,0 +1,325 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model roles {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  description String?
+  user_roles  user_roles[]
+}
+
+model users {
+  id            BigInt       @id @default(autoincrement())
+  full_name     String
+  email         String       @unique
+  password_hash String
+  phone         String?
+  date_of_birth DateTime?
+  avatar_url    String?
+  points        Int          @default(0)
+  status        Status       @default(active)
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+  user_roles    user_roles[]
+  bookings      bookings[]
+  audit_logs    audit_logs[]
+}
+
+model user_roles {
+  user    users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role    roles @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  user_id BigInt
+  role_id Int
+
+  @@id([user_id, role_id])
+}
+
+model movies {
+  id               BigInt          @id @default(autoincrement())
+  title            String
+  slug             String?         @unique
+  synopsis         String?         @db.Text
+  genres           String?
+  duration_minutes Int?
+  rating           String?
+  language         String?
+  country          String?
+  director         String?
+  cast             String?         @db.Text
+  poster_url       String?
+  backdrop_url     String?
+  trailer_url      String?
+  status           MovieStatus     @default(draft)
+  release_date     DateTime?
+  is_featured      Boolean         @default(false)
+  created_at       DateTime        @default(now())
+  updated_at       DateTime        @updatedAt
+  showtimes        showtimes[]
+  movie_promotions movie_promotions[]
+}
+
+model branches {
+  id        Int          @id @default(autoincrement())
+  name      String
+  address   String?
+  city      String?
+  hotline   String?
+  latitude  Decimal?
+  longitude Decimal?
+  status    BranchStatus @default(active)
+  screens   screens[]
+}
+
+model screens {
+  id        Int          @id @default(autoincrement())
+  branch_id Int
+  name      String
+  seat_rows Int
+  seat_cols Int
+  type      ScreenType   @default(standard)
+  status    BranchStatus @default(active)
+  branch    branches     @relation(fields: [branch_id], references: [id], onDelete: Cascade)
+  seats     seats[]
+  showtimes showtimes[]
+}
+
+model seats {
+  id          Int      @id @default(autoincrement())
+  screen_id   Int
+  seat_code   String
+  seat_row    String
+  seat_number Int
+  seat_type   SeatType @default(standard)
+  screen      screens  @relation(fields: [screen_id], references: [id], onDelete: Cascade)
+  booking_items booking_items[]
+
+  @@unique([screen_id, seat_code])
+}
+
+model showtimes {
+  id          BigInt         @id @default(autoincrement())
+  movie_id    BigInt
+  screen_id   Int
+  start_time  DateTime
+  end_time    DateTime
+  language    String?
+  subtitle    String?
+  status      ShowtimeStatus @default(scheduled)
+  movie       movies         @relation(fields: [movie_id], references: [id], onDelete: Cascade)
+  screen      screens        @relation(fields: [screen_id], references: [id], onDelete: Cascade)
+  bookings    bookings[]
+}
+
+model ticket_prices {
+  id          Int        @id @default(autoincrement())
+  screen_type ScreenType
+  seat_type   SeatType
+  day_type    DayType    @default(weekday)
+  price       Decimal
+  is_active   Boolean    @default(true)
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
+
+  @@unique([screen_type, seat_type, day_type])
+}
+
+model bookings {
+  id               BigInt        @id @default(autoincrement())
+  user_id          BigInt?
+  showtime_id      BigInt
+  booking_code     String        @unique
+  subtotal         Decimal
+  discount         Decimal?      @default(0)
+  total_amount     Decimal
+  payment_method   PaymentMethod @default(momo)
+  payment_status   PaymentStatus @default(pending)
+  status           BookingStatus @default(reserved)
+  transaction_id   String?       @unique
+  qr_code          String?       @db.Text
+  qr_expires_at    DateTime?
+  ticket_qr_code   String?       @db.Text
+  email_sent       Boolean       @default(false)
+  email_sent_at    DateTime?
+  paid_at          DateTime?
+  created_at       DateTime      @default(now())
+  updated_at       DateTime      @updatedAt
+  user             users?        @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  showtime         showtimes     @relation(fields: [showtime_id], references: [id], onDelete: Cascade)
+  booking_items    booking_items[]
+  booking_concessions booking_concessions[]
+  payments         payments[]
+}
+
+model booking_items {
+  id         BigInt   @id @default(autoincrement())
+  booking_id BigInt
+  seat_id    Int
+  seat_price Decimal
+  booking    bookings @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  seat       seats    @relation(fields: [seat_id], references: [id], onDelete: Cascade)
+
+  @@unique([booking_id, seat_id])
+}
+
+model concessions {
+  id          Int      @id @default(autoincrement())
+  name        String
+  description String?
+  price       Decimal
+  type        ConcessionType @default(combo)
+  image_url   String?
+  booking_concessions booking_concessions[]
+}
+
+model booking_concessions {
+  id            BigInt      @id @default(autoincrement())
+  booking_id    BigInt
+  concession_id Int
+  quantity      Int         @default(1)
+  unit_price    Decimal
+  booking       bookings    @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  concession    concessions @relation(fields: [concession_id], references: [id], onDelete: Cascade)
+}
+
+model promotions {
+  id              Int        @id @default(autoincrement())
+  name            String
+  code            String?    @unique
+  description     String?
+  discount_type   DiscountType
+  discount_value  Decimal
+  max_usage       Int?
+  usage_count     Int         @default(0)
+  min_order_value Decimal?
+  start_date      DateTime?
+  end_date        DateTime?
+  status          PromotionStatus @default(draft)
+  movie_promotions movie_promotions[]
+}
+
+model movie_promotions {
+  movie_id     BigInt
+  promotion_id Int
+  movie        movies     @relation(fields: [movie_id], references: [id], onDelete: Cascade)
+  promotion    promotions @relation(fields: [promotion_id], references: [id], onDelete: Cascade)
+
+  @@id([movie_id, promotion_id])
+}
+
+model payments {
+  id              BigInt        @id @default(autoincrement())
+  booking_id      BigInt
+  transaction_id  String         @unique
+  amount          Decimal
+  bank_account    String?
+  bank_name       String?
+  qr_code         String?       @db.Text
+  qr_data         String?       @db.Text
+  payment_method  PaymentMethod @default(vnpay)
+  status          PaymentStatus @default(pending)
+  bank_response   Json?
+  expires_at      DateTime?
+  paid_at         DateTime?
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+  booking         bookings      @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+
+  @@index([transaction_id])
+  @@index([booking_id])
+  @@index([status])
+}
+
+model audit_logs {
+  id         BigInt   @id @default(autoincrement())
+  user_id    BigInt?
+  action     String
+  payload    Json?
+  created_at DateTime @default(now())
+  user       users?   @relation(fields: [user_id], references: [id], onDelete: SetNull)
+}
+
+enum Status {
+  active
+  blocked
+  pending
+}
+
+enum MovieStatus {
+  now_showing
+  coming_soon
+  draft
+  archived
+}
+
+enum BranchStatus {
+  active
+  maintenance
+  inactive
+}
+
+enum ScreenType {
+  standard
+}
+
+enum SeatType {
+  standard
+  vip
+}
+
+enum ShowtimeStatus {
+  scheduled
+  selling
+  closed
+  cancelled
+}
+
+enum PaymentMethod {
+  cash
+  momo
+  vnpay
+  credit
+  wallet
+  bank_transfer
+}
+
+enum PaymentStatus {
+  pending
+  paid
+  refunded
+  failed
+}
+
+enum BookingStatus {
+  reserved
+  confirmed
+  cancelled
+}
+
+enum ConcessionType {
+  combo
+  popcorn
+  drink
+  snack
+}
+
+enum DiscountType {
+  percent
+  fixed
+}
+
+enum PromotionStatus {
+  draft
+  active
+  expired
+  disabled
+}
+
+enum DayType {
+  weekday
+}
